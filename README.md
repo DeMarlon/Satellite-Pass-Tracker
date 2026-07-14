@@ -9,3 +9,5 @@ The calculated orbit and pass data is then used to populate a countdown list of 
 Uses https://github.com/davidmoten/predict4java for the pass prediction calculations.
 Also uses NASA GIBS cloud data for an optional, (very) experimental cloud overlay: 
 We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS).
+
+This project is completely free, ad-free, and open-source. If you wish to show financial appreciation for it, please consider donating to Celestrak: https://giving.gofundme.com/campaign/750670/donate
