@@ -1,7 +1,11 @@
 # Satellite-Pass-Tracker
-Android app to track satellite passes over ground stations
+Android app to track satellite passes over ground stations.
 
-Uses https://github.com/davidmoten/predict4java for pass prediction.
+Satellites are added via NORAD ID, associated orbit data is fetched via TLEs provided by https://celestrak.org/.
+A selection of predefined ground stations exists, and the user can add custom ones via coordinates.
 
-Also uses NASA GIBS cloud data for optional cloud layer: 
+The calculated orbit and pass data is then used to populate a countdown list of upcoming and ongoing passes as well as for 3D orbit and pass visualization.
+
+Uses https://github.com/davidmoten/predict4java for the pass prediction calculations.
+Also uses NASA GIBS cloud data for an optional, (very) experimental cloud overlay: 
 We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS).
