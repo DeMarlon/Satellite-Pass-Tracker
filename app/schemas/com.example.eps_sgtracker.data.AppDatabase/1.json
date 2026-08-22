@@ -1,0 +1,43 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "ddfce58471f31f0a73c54d960c5f278f",
+    "entities": [
+      {
+        "tableName": "satellite_tles",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`noradId` INTEGER NOT NULL, `rawTleText` TEXT NOT NULL, `lastUpdatedMillis` INTEGER NOT NULL, PRIMARY KEY(`noradId`))",
+        "fields": [
+          {
+            "fieldPath": "noradId",
+            "columnName": "noradId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawTleText",
+            "columnName": "rawTleText",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUpdatedMillis",
+            "columnName": "lastUpdatedMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "noradId"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ddfce58471f31f0a73c54d960c5f278f')"
+    ]
+  }
+}

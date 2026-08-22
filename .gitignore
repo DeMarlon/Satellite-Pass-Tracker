@@ -1,0 +1,44 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# --- Added during pre-production audit (2026-08-22) ---
+
+# Kotlin incremental compilation state
+/.kotlin
+
+# Release artifacts stay archived on disk, not in git: an AAB is ~9 MB and its
+# mapping.txt another ~40 MB, per release.
+/Releases
+
+# Pre-audit source snapshot. Safe to delete once the git history below is
+# trusted; kept out of the repo either way.
+/_backup_pre_audit_*
+
+# Debugging leftovers at the repo root - logcat dumps and repro screenshots.
+# The leading slash anchors these to the root, so design/*.png and the launcher
+# icons under app/src/main/res/ are unaffected.
+/*.logcat
+/*.png
+
+# Local-only Claude Code settings
+/.claude/settings.local.json
+
+# Machine-specific IDE state: which emulator was last selected (embeds a local
+# AVD path), device-manager UI state, and local assistant preferences. None of
+# it is project configuration.
+/.idea/deploymentTargetSelector.xml
+/.idea/deviceManager.xml
+/.idea/studiobot.xml

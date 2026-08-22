@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+    Monochrome (themed-icon) layer for the adaptive launcher icon. Android's themed-icon renderer
+    uses ONLY this drawable's alpha channel as a stencil and tints it uniformly with the user's
+    theme color - so the glyph shapes themselves must be the only opaque pixels. The full-color
+    raster foreground can't be reused here: its alpha channel is one solid opaque rectangle (all
+    artwork lives in RGB), which stenciled down to a featureless tinted block - the "invisible
+    icon" bug reported by users with themed icons enabled.
+
+    Simplified mark: globe + orbital ring + satellite dot, kept within the ~66dp adaptive-icon
+    safe zone of the 108dp viewport.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Globe: filled circle at the center. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M 39,54 a 15,15 0 1,0 30,0 a 15,15 0 1,0 -30,0 z" />
+
+    <!-- Orbit ring + satellite, tilted together around the globe. -->
+    <group
+        android:rotation="-25"
+        android:pivotX="54"
+        android:pivotY="54">
+        <path
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="3.5"
+            android:pathData="M 26,54 a 28,11 0 1,0 56,0 a 28,11 0 1,0 -56,0" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M 78,54 a 4,4 0 1,0 8,0 a 4,4 0 1,0 -8,0 z" />
+    </group>
+</vector>

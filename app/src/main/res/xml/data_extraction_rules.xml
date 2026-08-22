@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Excludes only, so everything NOT listed is backed up. That deliberately covers all three
+  settings stores:
+    app_settings       - theme accent, trajectory config, forecast days, view toggles
+    satellite_settings - tracked NORAD IDs, display order, hidden set, per-satellite station
+                         allow-lists, and the hand-entered rev-# orbit offsets (which no
+                         TLE-derived formula can recover - see propagatedOrbitNumber)
+    tracker_settings   - custom ground stations and active station codes
+  A DataStore added later is therefore backed up automatically.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- AlarmManager alarms do not survive a backup/transfer, only the DataStore entries do.
+             Restoring these would render bell indicators for reminders that never fire until the
+             next reboot re-arms them via BootReceiver. -->
+        <exclude domain="file" path="datastore/pass_reminders.preferences_pb" />
+        <!-- Re-fetchable TLE cache. checkAndRefreshIfExpired refetches anything over 48h old, so
+             restoring it only risks a brief window of stale orbital elements. -->
+        <exclude domain="database" path="tracker_database" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore/pass_reminders.preferences_pb" />
+        <exclude domain="database" path="tracker_database" />
+    </device-transfer>
+</data-extraction-rules>
