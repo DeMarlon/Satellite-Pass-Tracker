@@ -41,9 +41,13 @@ object CelestrakApi {
 
         val body = client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw IOException("Unexpected response code: ${response.code}")
+                // Typed, carrying the status, because the caller's response to a non-200 is
+                // categorically different from its response to a dropped socket: CelesTrak's usage
+                // policy is that a non-200 means stop querying entirely, while a transport blip is
+                // worth retrying. A flat IOException made those indistinguishable.
+                throw CelestrakHttpException(response.code)
             }
-            response.body?.string() ?: throw IOException("Empty response body")
+            response.body.string()
         }
 
         // CelesTrak's GP/JSON endpoint always returns an array, even for a single-satellite
@@ -51,7 +55,10 @@ object CelestrakApi {
         // JSON-format equivalent of the old "No GP data found" plain-text response).
         val array = JSONArray(body)
         if (array.length() == 0) {
-            throw IOException("No GP data found for NORAD ID $noradId")
+            // Distinct from CelestrakHttpException: this arrives as an HTTP *200* carrying an empty
+            // array, so it costs nothing against CelesTrak's error budget and must NOT halt the run
+            // - it just means this one catalog number does not exist. Retrying cannot fix it either.
+            throw CelestrakNoDataException(noradId)
         }
         parseOmmRecord(array.getJSONObject(0))
     }
@@ -80,3 +87,23 @@ object CelestrakApi {
         revAtEpoch = json.getInt("REV_AT_EPOCH")
     )
 }
+
+/**
+ * CelesTrak answered with a non-2xx status.
+ *
+ * Per CelesTrak's usage policy, M2M clients "should immediately stop querying when it receives any
+ * non-HTTP 200 responses and report the results to a human", and repeating a 403 or 404 "is not
+ * going to change" the answer while counting toward the 50-errors-in-2-hours threshold that gets an
+ * IP firewalled. So this is never retried, and it halts the whole refresh run.
+ */
+class CelestrakHttpException(val code: Int) : IOException("CelesTrak returned HTTP $code")
+
+/**
+ * An HTTP 200 whose GP array was empty - how this endpoint reports an unrecognised catalog number.
+ *
+ * Deliberately NOT a [CelestrakHttpException]: it is a successful response, so it neither counts
+ * against the error budget nor justifies halting the other satellites in the run. It is terminal
+ * for this NORAD ID only, and retrying is pointless.
+ */
+class CelestrakNoDataException(val noradId: Int) :
+    IOException("No GP data found for NORAD ID $noradId")

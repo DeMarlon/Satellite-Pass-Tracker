@@ -78,6 +78,14 @@ private val STALE_EPOCH_WARN_COLOR = Color(0xFFFFB74D)
 
 // Same "yyyy-MM-dd HH:mm:ss", UTC-or-local convention as the aggregate "Most Recent Fetch" text
 // below, so a satellite's own timestamp and the fleet-wide one are always directly comparable.
+// Wall-clock only, deliberately: the halt window is half an hour, so a date adds nothing, and a
+// fixed time avoids a per-second countdown that would recompose this whole screen at 1 Hz.
+private fun formatClockTime(millis: Long, useUtc: Boolean): String {
+    val formatter = SimpleDateFormat("HH:mm", Locale.US)
+    formatter.timeZone = if (useUtc) TimeZone.getTimeZone("UTC") else TimeZone.getDefault()
+    return formatter.format(Date(millis))
+}
+
 private fun formatOmmTimestamp(millis: Long?, useUtc: Boolean): String {
     if (millis == null || millis == 0L) return "Never"
     val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
@@ -103,6 +111,7 @@ fun SetupScreen(viewModel: TrackerViewModel) {
     // Collect orbital-data (OMM) synchronization state flows from the viewmodel
     val isUpdatingTles by viewModel.isUpdatingTles.collectAsStateWithLifecycle()
     val lastUpdatedText by viewModel.lastUpdatedText.collectAsStateWithLifecycle()
+    val refreshHalt by viewModel.refreshHalt.collectAsStateWithLifecycle()
     val satelliteTleTimestamps by viewModel.satelliteTleTimestamps.collectAsStateWithLifecycle()
     val satelliteTleEpochs by viewModel.satelliteTleEpochs.collectAsStateWithLifecycle()
     val stationColorOverrides by viewModel.stationColorOverrides.collectAsStateWithLifecycle()
@@ -251,6 +260,11 @@ fun SetupScreen(viewModel: TrackerViewModel) {
                         dragOrder.mapNotNull { satellitesById[it] }.forEachIndexed { rowIndex, sat ->
                             val resolvedName = satelliteNames[sat.noradId]
                             val fetchFailed = resolvedName == null && sat.noradId in fetchFailedIds
+                            // Same flag, opposite side: the ID DID resolve at some point, but the
+                            // most recent refresh did not succeed. Previously unreachable as a UI
+                            // state, because the automatic path reported a failed refresh as a
+                            // success and simply served the stale cache.
+                            val refreshFailed = resolvedName != null && sat.noradId in fetchFailedIds
                             val displayName = resolvedName
                                 ?: if (fetchFailed) "Failed to fetch - check NORAD ID" else "Fetching name..."
                             val satColor = getSatelliteColor(sat.noradId, satelliteColorOverrides)
@@ -419,6 +433,22 @@ fun SetupScreen(viewModel: TrackerViewModel) {
                                                 }
                                             )
                                         }
+                                        // The last refresh attempt failed while an older element
+                                        // set is still cached, so the satellite keeps tracking and
+                                        // the row above shows when it WAS last updated. Needs its
+                                        // own line because `fetchFailed` above is deliberately
+                                        // gated on an unresolved name - it means "this NORAD ID
+                                        // never resolved", which is a configuration problem with a
+                                        // different fix. This one is transient: network, or
+                                        // CelesTrak declining the request.
+                                        if (refreshFailed) {
+                                            Text(
+                                                text = "Update failed - showing last known data",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        }
                                         // Surfaced only once it matters, so a healthy satellite
                                         // stays uncluttered. Advisory, never blocking: a stale
                                         // prediction still beats none, and only the operator knows
@@ -546,6 +576,25 @@ fun SetupScreen(viewModel: TrackerViewModel) {
                             } else {
                                 MaterialTheme.colorScheme.primary
                             }
+                        )
+                    }
+
+                    // CelesTrak answered with a non-200 and querying is paused. Reported rather
+                    // than left as a bare "Update failed" on every satellite, because that reads as
+                    // "try again" - and tapping again is exactly what accumulates HTTP errors
+                    // toward the 50-in-2-hours threshold that gets an IP firewalled. Saying what
+                    // happened and when it resolves is what stops the retry loop being human.
+                    // takeIf guards against showing a deadline that has already passed: the halt
+                    // itself is cleared lazily, on the next fetch attempt, so the state can outlive
+                    // its own window if nothing has tried to query since.
+                    refreshHalt?.takeIf { it.retryAtMillis > System.currentTimeMillis() }?.let { halt ->
+                        Text(
+                            text = "CelesTrak returned HTTP ${halt.httpCode}. Querying is paused " +
+                                "until ${formatClockTime(halt.retryAtMillis, useUtcTime)} so this " +
+                                "device isn't blocked - cached orbital data is still in use.",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
 

@@ -12,6 +12,8 @@ import com.example.eps_sgtracker.data.GroundStationRepository
 import com.example.eps_sgtracker.data.PassReminder
 import com.example.eps_sgtracker.data.ReminderRepository
 import com.example.eps_sgtracker.data.SatelliteRepository
+import com.example.eps_sgtracker.data.RefreshHalt
+import com.example.eps_sgtracker.data.TleFetchResult
 import com.example.eps_sgtracker.data.TleRepository
 import com.example.eps_sgtracker.data.TrajectoryConfig
 import com.example.eps_sgtracker.data.TrajectoryDurationUnit
@@ -491,6 +493,15 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
     // TleRepository.getLatestTleTimestamp() returns when nothing has ever been cached.
     private val _lastSyncTimestampMillis = MutableStateFlow<Long?>(null)
 
+    /**
+     * Non-null while CelesTrak querying is suspended after a non-200 response.
+     *
+     * Surfaced so a halt can be reported rather than showing every satellite a bare "Update
+     * failed", which invites another Force Update tap - the exact behaviour that accumulates HTTP
+     * errors toward CelesTrak firewalling the IP.
+     */
+    val refreshHalt: StateFlow<RefreshHalt?> = tleRepository.refreshHalt
+
     val lastUpdatedText: StateFlow<String> = combine(
         _lastSyncTimestampMillis, useUtcTime
     ) { millis, utc ->
@@ -583,7 +594,7 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch(Dispatchers.IO) {
             guarded { refreshExpiredTlesAndRecompute() }
-            // checkAndRefreshIfExpired only ever gets called here (startup) and in addSatellite()
+            // getTleRefreshingIfExpired only ever runs from here (startup) and addSatellite()
             // - a satellite tracked continuously for more than PERIODIC_TLE_CHECK_INTERVAL_MS
             // without the app restarting or a manual Force TLE Update would otherwise never have
             // its TLE refreshed again, silently drifting further from reality the longer the
@@ -967,20 +978,22 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
 
     private suspend fun resolveOneSatellite(noradId: Int, mode: TleRefreshMode) {
         try {
-            val tleRawText = tleFetchSemaphore.withPermit {
+            val result = tleFetchSemaphore.withPermit {
                 // Timeout starts only after the permit is acquired, so it always bounds real
                 // fetch time rather than queueing time behind the semaphore.
                 withTimeoutOrNull(PER_SATELLITE_FETCH_TIMEOUT_MS) {
                     when (mode) {
-                        TleRefreshMode.REFRESH_IF_EXPIRED -> {
-                            tleRepository.checkAndRefreshIfExpired(noradId)
-                            tleRepository.getTle(noradId)
+                        TleRefreshMode.REFRESH_IF_EXPIRED ->
+                            tleRepository.getTleRefreshingIfExpired(noradId)
+                        TleRefreshMode.FORCE_REFRESH -> {
+                            val text = tleRepository.forceRefreshSatelliteTle(noradId)
+                            TleFetchResult(text, refreshFailed = text == null)
                         }
-                        TleRefreshMode.FORCE_REFRESH -> tleRepository.forceRefreshSatelliteTle(noradId)
                     }
                 }
             }
-            applyFetchResult(noradId, tleRawText)
+            // withTimeoutOrNull yields null on timeout, which is a failed refresh like any other.
+            applyFetchResult(noradId, result ?: TleFetchResult(null, refreshFailed = true))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -989,7 +1002,8 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun applyFetchResult(noradId: Int, tleRawText: String?) {
+    private fun applyFetchResult(noradId: Int, result: TleFetchResult) {
+        val tleRawText = result.rawTleText
         if (tleRawText == null) {
             // Covers both a genuine repository failure and a timeout (withTimeoutOrNull returns
             // null either way) - both correctly resolve to the same "failed to fetch" UI state.
@@ -1011,7 +1025,17 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
         val tle = TLE(arrayOf(tleLines[0], tleLines[1], tleLines[2]))
         val resolvedName = tle.name ?: "NORAD ID: $noradId"
 
-        _satelliteFetchFailed.update { it - noradId }
+        // The whole point of TleFetchResult. A refresh that was due and failed still yields usable
+        // text - the previously cached element set - so the satellite keeps tracking rather than
+        // disappearing. But it raises the SAME failure flag a manual Force Update would, instead of
+        // being reported as a successful resolve. Without this, the automatic path silently served
+        // months-old elements as though they had just been fetched, while the manual path on the
+        // identical failure reported an error: same cause, two different answers.
+        if (result.refreshFailed) {
+            _satelliteFetchFailed.update { it + noradId }
+        } else {
+            _satelliteFetchFailed.update { it - noradId }
+        }
         activeTleCache[noradId] = tleRawText
         // Overwrites any existing propagator, which is the whole point: this runs on every
         // successful refresh, so a satellite whose elements were just updated gets a propagator
