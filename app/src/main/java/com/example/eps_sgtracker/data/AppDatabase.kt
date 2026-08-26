@@ -29,7 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "tracker_database"
                 )
                     // This table is a pure TLE cache - every row is re-fetchable from CelesTrak,
-                    // and checkAndRefreshIfExpired refetches anything over 48h old anyway. A
+                    // and getTleRefreshingIfExpired refetches anything over 48h old anyway. A
                     // destructive fallback therefore costs the user nothing beyond one refetch,
                     // which is a far better outcome than a crash on a schema bump.
                     .fallbackToDestructiveMigration(dropAllTables = true)
