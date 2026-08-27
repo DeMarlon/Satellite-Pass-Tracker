@@ -12,16 +12,43 @@ android {
         applicationId = "com.mdeutsch.spt"
         minSdk = 26
         targetSdk = 37
-        versionCode = 7
-        versionName = "1.5.1"
+        versionCode = 8
+        versionName = "1.5.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // R8 DISABLED. Versions 1.5 (versionCode 6) and 1.5.1 (7) both shipped to production
+            // unable to start, and the captured crash proves why:
+            //
+            //   NoClassDefFoundError: <clinit> failed for
+            //       com.github.amsacode.predict4java.PassPredictor
+            //     at TrackerViewModel$recomputePasses$1
+            //   Caused by: org.apache.commons.logging.LogConfigurationException:
+            //       NullPointerException: String.trim() on a null reference
+            //         at org.apache.commons.logging.impl.LogFactoryImpl.newInstance
+            //
+            // PassPredictor initialises a logger in a static field initialiser, so any failure
+            // there poisons the class permanently - a failed <clinit> marks it erroneous and every
+            // later access throws NoClassDefFoundError. That is why the app could not be reopened
+            // rather than merely crashing once.
+            //
+            // Commons Logging (transitive via predict4java) broke under R8 twice, differently:
+            //   1.5   - shrinking DELETED LogFactoryImpl, which is only reached by Class.forName
+            //           on a hardcoded string, so nothing referenced it by symbol.
+            //   1.5.1 - a keep rule restored it, but the OPTIMISER still rewrote its bodies
+            //           (-keep stops removal and renaming, not optimisation) and it began
+            //           throwing instead.
+            //
+            // Versions 1.2-1.4 ran unminified without incident. Re-enabling R8 needs a real
+            // solution for Commons Logging - most plausibly excluding it and supplying a tiny
+            // no-op Log/LogFactory in this app's own source, so no discovery or reflection is
+            // involved at all - plus a release build verified ON A DEVICE across TRACK, PLAN, the
+            // sky plot, reminders and a reboot. Two builds reached production on the strength of
+            // a green build alone; neither was run on a phone first.
+            isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
