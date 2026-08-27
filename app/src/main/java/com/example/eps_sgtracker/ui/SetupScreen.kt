@@ -232,7 +232,13 @@ fun SetupScreen(viewModel: TrackerViewModel) {
                             onValueChange = { noradInput = it },
                             label = { Text("NORAD ID") },
                             modifier = Modifier.weight(1f),
-                            singleLine = true
+                            singleLine = true,
+                            // Catalogue numbers are positive integers - the ADD button parses with
+                            // toIntOrNull() - so a digits-only pad costs nothing and saves hunting
+                            // for the number row. Deliberately NOT applied to Latitude/Longitude:
+                            // KeyboardType.Number is digits-only on many IMEs, which would make
+                            // McMurdo's -77.8390 impossible to type.
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
                         Button(
                             onClick = {
