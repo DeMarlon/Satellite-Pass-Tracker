@@ -60,17 +60,25 @@ private val PILL_TEXT_INSET = 6.dp
 //
 // Weighted towards the satellite name, which is the only column whose content isn't a known fixed
 // width. The others are sized to what they actually have to hold, so the slack goes where it buys
-// something: at 360dp this leaves REV ~41dp (five monospace digits need ~36), GS ~34dp (a
-// three-letter pill plus its 12dp of inset needs ~31) and AOS/LOS ~50dp each (HH:mm at 13sp
-// monospace needs ~39), while the name gets ~103dp of text width instead of ~85dp.
+// something: at 360dp this leaves REV ~41dp (five monospace digits need ~36), GS ~46dp and AOS/LOS
+// ~50dp each (HH:mm at 13sp monospace needs ~39), while the name gets ~92dp of text width.
+//
+// GS was originally 0.7f (~34dp) on the reasoning that "a three-letter pill plus its 12dp of inset
+// needs ~31". That averaged the glyphs. Station codes are uppercase, and three WIDE capitals are
+// far wider than three narrow ones - MCM and FCN overflowed and were silently chopped to "MC" and
+// "FC" on a 360dp screen, while SVL fitted and looked fine. maxLines = 1 defaults to
+// TextOverflow.Clip, so there was not even an ellipsis to hint the code was incomplete: the app
+// simply displayed the wrong station code. The extra width comes from the satellite column because
+// that name auto-shrinks to fit (see SATELLITE_NAME_MIN/MAX_SIZE) and so degrades gracefully,
+// whereas a clipped pill silently lies.
 //
 // Note the cells are dp and their contents are sp, so a large accessibility font scale eventually
 // overruns them whatever the weights are - AOS/LOS, the tightest of the fixed columns, start
 // clipping somewhere past ~1.3x. Taking the name's extra width mostly from GS rather than from the
 // time columns is what keeps that threshold close to where it already was.
-private const val COLUMN_WEIGHT_SATELLITE = 2.4f
+private const val COLUMN_WEIGHT_SATELLITE = 2.15f
 private const val COLUMN_WEIGHT_REV = 0.85f
-private const val COLUMN_WEIGHT_GS = 0.7f
+private const val COLUMN_WEIGHT_GS = 0.95f
 private const val COLUMN_WEIGHT_TIME = 1.05f
 
 // A hard floor on the gaps between columns. Weights alone can't guarantee separation - they only
