@@ -2,7 +2,6 @@ package com.example.eps_sgtracker.ui
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,6 +25,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.net.toUri
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -1211,7 +1211,7 @@ fun SetupScreen(viewModel: TrackerViewModel) {
                     TextButton(
                         onClick = {
                             try {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SOURCE_URL)))
+                                context.startActivity(Intent(Intent.ACTION_VIEW, SOURCE_URL.toUri()))
                             } catch (e: ActivityNotFoundException) {
                                 // No browser installed. The URL is spelled out below anyway, so
                                 // there is nothing to recover and nothing worth crashing over.
