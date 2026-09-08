@@ -1,5 +1,8 @@
 package com.example.eps_sgtracker.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -30,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Copyright
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Info
@@ -37,6 +42,7 @@ import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.graphics.SolidColor
+import com.example.eps_sgtracker.BuildConfig
 import com.example.eps_sgtracker.data.CLOUD_LAYER_FEATURE_ENABLED
 import com.example.eps_sgtracker.data.MAX_FORECAST_DAYS
 import com.example.eps_sgtracker.data.MAX_MIN_PASS_ELEVATION_DEG
@@ -56,6 +62,10 @@ import kotlin.math.roundToInt
 // and the layer's actual rendering are deliberately the same switch - see CLOUD_LAYER_FEATURE_ENABLED
 // for why hiding only the control is not enough to disable the feature.
 private const val SHOW_CLOUD_LAYER_TOGGLE = CLOUD_LAYER_FEATURE_ENABLED
+
+// Where the GPL's source requirement is actually discharged for a Play user. Someone who installed
+// the binary from the store has no other route to the code, so this link is not decoration.
+private const val SOURCE_URL = "https://github.com/DeMarlon/Satellite-Pass-Tracker"
 
 // Identifies which entity a currently-open color picker dialog is editing - a single dialog
 // instance is reused for both stations and satellites rather than duplicating the dialog wiring.
@@ -107,6 +117,8 @@ fun SetupScreen(viewModel: TrackerViewModel) {
     var stationPickerNoradId by remember { mutableStateOf<Int?>(null) }
     var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
     var showInfoDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     // Collect orbital-data (OMM) synchronization state flows from the viewmodel
     val isUpdatingTles by viewModel.isUpdatingTles.collectAsStateWithLifecycle()
@@ -190,6 +202,18 @@ fun SetupScreen(viewModel: TrackerViewModel) {
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.align(Alignment.Center)
                 )
+                // Mirrors the info button opposite it: same size, tint and popup mechanics, so
+                // the two header affordances read as a pair rather than as two unrelated controls.
+                IconButton(
+                    onClick = { showAboutDialog = true },
+                    modifier = Modifier.align(Alignment.CenterStart)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Copyright,
+                        contentDescription = "About this app",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
                 IconButton(
                     onClick = { showInfoDialog = true },
                     modifier = Modifier.align(Alignment.CenterEnd)
@@ -1103,6 +1127,104 @@ fun SetupScreen(viewModel: TrackerViewModel) {
             },
             confirmButton = {
                 TextButton(onClick = { showInfoDialog = false }) { Text("Got it") }
+            }
+        )
+    }
+
+    if (showAboutDialog) {
+        AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = { Text("About") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "SPT - Satellite Pass Tracker",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Version ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Copyright \u00a9 2026 Marlon Deutsch",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Text(
+                        text = "This program is free software: you can redistribute it and/or " +
+                            "modify it under the terms of the GNU General Public License version " +
+                            "3, as published by the Free Software Foundation.",
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "It is distributed in the hope that it will be useful, but WITHOUT " +
+                            "ANY WARRANTY; without even the implied warranty of MERCHANTABILITY " +
+                            "or FITNESS FOR A PARTICULAR PURPOSE.",
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // The full licence text and every third-party attribution live in the repo;
+                    // this is the only path there from a Play install.
+                    TextButton(
+                        onClick = {
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SOURCE_URL)))
+                            } catch (e: ActivityNotFoundException) {
+                                // No browser installed. The URL is spelled out below anyway, so
+                                // there is nothing to recover and nothing worth crashing over.
+                                e.printStackTrace()
+                            }
+                        },
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text("Source code, licence and credits on GitHub", fontSize = 13.sp)
+                    }
+                    Text(
+                        text = SOURCE_URL,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Text(
+                        text = "CREDITS",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    val credits = listOf(
+                        "Pass prediction by predict4java (GPL-2.0-or-later) - D. A. B. Johnson " +
+                            "G4DPZ, from KD2BD's PREDICT and T. S. Kelso's SGP4/SDP4 models.",
+                        "Orbital data (OMM) from CelesTrak, celestrak.org - please consider " +
+                            "donating to them rather than to this app.",
+                        "Map vectors from Natural Earth (public domain).",
+                        "Earth textures: NASA Blue Marble Next Generation and Black Marble.",
+                        "Cloud imagery from NASA GIBS (MODIS Terra).",
+                        "OkHttp and AndroidX Jetpack Compose (Apache-2.0)."
+                    )
+                    credits.forEach { credit ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("\u2022", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(credit, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAboutDialog = false }) { Text("Close") }
             }
         )
     }
