@@ -1,7 +1,5 @@
 package com.example.eps_sgtracker.ui
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,8 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
-import androidx.core.net.toUri
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -118,7 +114,6 @@ fun SetupScreen(viewModel: TrackerViewModel) {
     var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
     var showInfoDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
-    val context = LocalContext.current
 
     // Collect orbital-data (OMM) synchronization state flows from the viewmodel
     val isUpdatingTles by viewModel.isUpdatingTles.collectAsStateWithLifecycle()
@@ -1183,74 +1178,15 @@ fun SetupScreen(viewModel: TrackerViewModel) {
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text(
-                        text = "Copyright \u00a9 2026 Marlon Deutsch",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
 
                     Text(
-                        text = "This program is free software: you can redistribute it and/or " +
+                        text = "This program is free open-source software, available on GitHub: " + SOURCE_URL + ". You can redistribute it and/or " +
                             "modify it under the terms of the GNU General Public License version " +
-                            "3, as published by the Free Software Foundation.",
+                            "3.",
                         fontSize = 13.sp,
                         lineHeight = 18.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text(
-                        text = "It is distributed in the hope that it will be useful, but WITHOUT " +
-                            "ANY WARRANTY; without even the implied warranty of MERCHANTABILITY " +
-                            "or FITNESS FOR A PARTICULAR PURPOSE.",
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    // The full licence text and every third-party attribution live in the repo;
-                    // this is the only path there from a Play install.
-                    TextButton(
-                        onClick = {
-                            try {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, SOURCE_URL.toUri()))
-                            } catch (e: ActivityNotFoundException) {
-                                // No browser installed. The URL is spelled out below anyway, so
-                                // there is nothing to recover and nothing worth crashing over.
-                                e.printStackTrace()
-                            }
-                        },
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("Source code, licence and credits on GitHub", fontSize = 13.sp)
-                    }
-                    Text(
-                        text = SOURCE_URL,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Text(
-                        text = "CREDITS",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    val credits = listOf(
-                        "Pass prediction by predict4java (GPL-2.0-or-later) - D. A. B. Johnson " +
-                            "G4DPZ, from KD2BD's PREDICT and T. S. Kelso's SGP4/SDP4 models.",
-                        "Orbital data (OMM) from CelesTrak, celestrak.org - please consider " +
-                            "donating to them rather than to this app.",
-                        "Map vectors from Natural Earth (public domain).",
-                        "Earth textures: NASA Blue Marble Next Generation and Black Marble.",
-                        "Cloud imagery from NASA GIBS (MODIS Terra).",
-                        "OkHttp and AndroidX Jetpack Compose (Apache-2.0)."
-                    )
-                    credits.forEach { credit ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("\u2022", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(credit, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
-                        }
-                    }
                 }
             },
             confirmButton = {
