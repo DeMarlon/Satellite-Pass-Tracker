@@ -72,4 +72,4 @@ Neither service requires an API key, and SPT ships no credentials of any kind.
 - **[NASA GIBS](https://nasa-gibs.github.io/gibs-api-docs/)** — the daily
   `MODIS_Terra_CorrectedReflectance_TrueColor` mosaic, fetched by
   [`GibsCloudApi.kt`](app/src/main/java/com/example/eps_sgtracker/network/GibsCloudApi.kt)
-  for the optional cloud-cover layer.
+  for the (currently completely disabled) cloud-cover layer.
