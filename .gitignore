@@ -1,12 +1,6 @@
 *.iml
 .gradle
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
 .DS_Store
 /build
 /captures
@@ -27,18 +21,69 @@ local.properties
 # trusted; kept out of the repo either way.
 /_backup_pre_audit_*
 
-# Debugging leftovers at the repo root - logcat dumps and repro screenshots.
-# The leading slash anchors these to the root, so design/*.png and the launcher
-# icons under app/src/main/res/ are unaffected.
-/*.logcat
+# Debugging leftovers - logcat dumps and repro screenshots.
+#
+# *.logcat is deliberately unanchored (a dump saved in a subdirectory counts too),
+# but /*.png is deliberately anchored to the ROOT and must stay that way: the ~20
+# gs*/repro*/stations*/fix* screenshots live there, while design/*.png, the launcher
+# icons under app/src/main/res/, and any future docs/screenshots/ are all things we
+# DO want tracked. Dropping the leading slash would silently swallow every one of them.
+*.logcat
 /*.png
 
-# Local-only Claude Code settings
+# Local-only Claude Code settings. Deliberately narrow rather than ignoring
+# .claude/ wholesale, so a shared CLAUDE.md or team settings.json can be
+# committed later without fighting this file.
 /.claude/settings.local.json
 
-# Machine-specific IDE state: which emulator was last selected (embeds a local
-# AVD path), device-manager UI state, and local assistant preferences. None of
-# it is project configuration.
-/.idea/deploymentTargetSelector.xml
-/.idea/deviceManager.xml
-/.idea/studiobot.xml
+# --- Added when the project went open-source (2026-09-08) ---
+
+# Signing material. NONE of this has ever been in the repo and the .jks lives in
+# Google Drive - these lines exist so a stray copy in the project directory cannot
+# be committed by an absent-minded `git add .`. On a public repo a pushed signing
+# key is a published signing key, and no later .gitignore edit can un-publish it.
+*.jks
+*.keystore
+*.p12
+*.pepk
+keystore.properties
+signing.properties
+secrets.properties
+
+# IDE state: ALLOWLIST, not denylist.
+#
+# This used to enumerate the handful of Studio files known to carry local state
+# (deploymentTargetSelector, deviceManager, studiobot). That fails open - every
+# file a future Studio version invents lands in git by default, and several of
+# them embed local AVD paths or per-machine test-run state. Inverting it means an
+# unrecognised .idea file is ignored until someone deliberately un-ignores it.
+#
+# /.idea/* and NOT /.idea/** - git never descends into a directory excluded by **,
+# which would make every negation below dead. The entries listed here are exactly
+# the nine files already tracked; project config that is genuinely shared (JDK
+# level, bytecode target, inspection profile) stays in, machine state stays out.
+/.idea/*
+!/.idea/.gitignore
+!/.idea/.name
+!/.idea/AndroidProjectSystem.xml
+!/.idea/compiler.xml
+!/.idea/gradle.xml
+!/.idea/misc.xml
+!/.idea/runConfigurations.xml
+!/.idea/vcs.xml
+!/.idea/inspectionProfiles/
+
+# OS and editor cruft, for contributors who are not on this machine.
+Thumbs.db
+ehthumbs.db
+desktop.ini
+.vscode/
+*.swp
+*~
+
+# Studio profiler dumps (heap/CPU), which land at the project root, and build
+# outputs that reached somewhere other than app/build/ or Releases/.
+*.hprof
+*.trace
+*.aab
+*.apk
