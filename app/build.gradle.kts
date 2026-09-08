@@ -76,6 +76,10 @@ android {
     }
     buildFeatures {
         compose = true
+        // AGP stopped generating BuildConfig by default in 8.0, and nothing referenced it until
+        // the ABOUT dialog needed to show the running version. Without this, BuildConfig.VERSION_NAME
+        // simply does not exist and SetupScreen will not compile.
+        buildConfig = true
     }
 }
 
