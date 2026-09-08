@@ -11,16 +11,19 @@
 All three must pass. `lintRelease` is not run by `bundleRelease` — `lintVitalRelease` only checks
 fatal-severity issues, so run it explicitly.
 
-Then confirm R8 actually ran and its output reached the bundle. A green build is **not** sufficient
-evidence for either of these:
+**R8 is disabled** (`isMinifyEnabled = false`), so there is no mapping file and no
+`BUNDLE-METADATA` obfuscation entry to look for. Its absence is expected, not a build failure.
 
-```bash
-ls -la app/build/outputs/mapping/release/mapping.txt
-unzip -l app/build/outputs/bundle/release/app-release.aab | grep BUNDLE-METADATA
-```
+Versions 1.5 (versionCode 6) and 1.5.1 (7) both reached production unable to start, because R8
+broke Commons Logging — twice, in two different ways. The full analysis sits in the comment above
+`isMinifyEnabled` in `app/build.gradle.kts`; the short version is that `PassPredictor` initialises
+a logger in a static field initialiser, and a failed `<clinit>` marks a class permanently
+erroneous, so the app could not be reopened rather than merely crashing once.
 
-Expect `com.android.tools.build.obfuscation/proguard.map` in that listing. Its presence is what
-clears Play's "no deobfuscation file" warning — there is nothing to upload by hand.
+Re-enabling R8 needs a real fix for Commons Logging — most plausibly excluding it and supplying a
+tiny no-op `Log`/`LogFactory` in this app's own source, so no reflection is involved at all — plus
+a release build verified **on a device** across TRACK, PLAN, the sky plot, reminders and a reboot.
+Both bad releases shipped on the strength of a green build alone; neither was run on a phone.
 
 ## 2. Sign
 
@@ -31,26 +34,26 @@ Bump `versionCode` in `app/build.gradle.kts` first — Play rejects a duplicate.
 
 ## 3. Archive
 
-Copy the mapping file next to the AAB you just signed:
-
 ```
 Releases/V<n>/
   app-release.aab
-  mapping.txt        <- from app/build/outputs/mapping/release/
 ```
 
-Play keeps its own copy for the crash console, but you need this locally to decode a stack trace a
-user emails you directly. It is specific to that build and cannot be regenerated once the build
-directory is gone. `Releases/` is deliberately gitignored — these are large binaries, and the AAB
-plus mapping is ~50 MB per release.
+`Releases/` is deliberately gitignored — an AAB is ~9 MB per release and has no business in git.
+
+There is no `mapping.txt` to archive while R8 is disabled. If R8 is ever re-enabled, copy it from
+`app/build/outputs/mapping/release/` into the same folder: Play keeps its own copy for the crash
+console, but you need a local one to decode a stack trace a user emails you directly, and it is
+specific to that build and cannot be regenerated once the build directory is gone.
 
 ## 4. Upload
 
-Closed testing track first, always. Two things to confirm on the upload screen:
+Closed testing track first, always. Two warnings are expected on the upload screen, and neither
+blocks the release:
 
-- The **deobfuscation warning is gone**. If it is not, R8 did not run or the mapping did not reach
-  the bundle — see step 1.
-- The **native debug symbols warning is still expected** — see below.
+- The **deobfuscation / missing-mapping warning** — expected, because R8 is disabled. There is
+  nothing to upload by hand.
+- The **native debug symbols warning** — also expected; see below.
 
 ## Known: the native debug symbols warning persists
 
@@ -91,9 +94,11 @@ Three that appear in an unfiltered log and are **not** app problems:
 What a genuine failure looks like: `FATAL EXCEPTION`, any `AndroidRuntime` E-line, or
 `ANR in com.mdeutsch.spt` from ActivityManager.
 
-**A debug build proves nothing about R8.** If class names appear unobfuscated in JIT/GC logs (e.g.
-`com.example.eps_sgtracker.ui.PassListScreenKt.PassRow$lambda$14`), R8 did not run. Anything
-R8-sensitive — the trajectory-unit round-trip especially — has to be tested on a release build.
+Unobfuscated class names in JIT/GC logs (e.g.
+`com.example.eps_sgtracker.ui.PassListScreenKt.PassRow$lambda$14`) are now normal in **every**
+build, release included, because R8 is disabled — they no longer tell you anything. That changes
+the moment R8 is re-enabled, at which point anything R8-sensitive (the trajectory-unit round-trip
+especially) has to be tested on a release build rather than a debug one.
 
 ## Keystore
 
