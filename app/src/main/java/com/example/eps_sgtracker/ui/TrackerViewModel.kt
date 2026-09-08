@@ -12,6 +12,7 @@ import com.example.eps_sgtracker.data.GroundStationRepository
 import com.example.eps_sgtracker.data.PassReminder
 import com.example.eps_sgtracker.data.ReminderRepository
 import com.example.eps_sgtracker.data.SatelliteRepository
+import com.example.eps_sgtracker.data.CelestrakUnreachable
 import com.example.eps_sgtracker.data.RefreshHalt
 import com.example.eps_sgtracker.data.TleFetchResult
 import com.example.eps_sgtracker.data.TleRepository
@@ -501,6 +502,16 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
      * errors toward CelesTrak firewalling the IP.
      */
     val refreshHalt: StateFlow<RefreshHalt?> = tleRepository.refreshHalt
+
+    /**
+     * Non-null while the last completed refresh could not reach CelesTrak at all.
+     *
+     * The counterpart to [refreshHalt], and the reason both exist separately: a non-200 is CelesTrak
+     * declining, an unreachable host is the network failing. They call for opposite advice - one
+     * says stop tapping Force Update, the other says check your connection and try again - and
+     * collapsing them into one "update failed" told the user neither.
+     */
+    val celestrakUnreachable: StateFlow<CelestrakUnreachable?> = tleRepository.celestrakUnreachable
 
     val lastUpdatedText: StateFlow<String> = combine(
         _lastSyncTimestampMillis, useUtcTime

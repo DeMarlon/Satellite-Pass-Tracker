@@ -39,15 +39,23 @@ object CelestrakApi {
         val url = "https://celestrak.org/NORAD/elements/gp.php?CATNR=$noradId&FORMAT=JSON"
         val request = Request.Builder().url(url).build()
 
-        val body = client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                // Typed, carrying the status, because the caller's response to a non-200 is
-                // categorically different from its response to a dropped socket: CelesTrak's usage
-                // policy is that a non-200 means stop querying entirely, while a transport blip is
-                // worth retrying. A flat IOException made those indistinguishable.
-                throw CelestrakHttpException(response.code)
+        // The try covers the transport only - connecting, and reading the body, both of which can
+        // fail with no usable answer ever arriving. It deliberately does NOT extend over the JSON
+        // parse below; see classifyFetchFailure for why that boundary matters.
+        val body = try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    // Typed, carrying the status, because the caller's response to a non-200 is
+                    // categorically different from its response to a dropped socket: CelesTrak's
+                    // usage policy is that a non-200 means stop querying entirely, while a
+                    // transport blip is worth retrying. A flat IOException made those
+                    // indistinguishable.
+                    throw CelestrakHttpException(response.code)
+                }
+                response.body.string()
             }
-            response.body.string()
+        } catch (e: IOException) {
+            throw classifyFetchFailure(e)
         }
 
         // CelesTrak's GP/JSON endpoint always returns an array, even for a single-satellite
@@ -87,6 +95,37 @@ object CelestrakApi {
         revAtEpoch = json.getInt("REV_AT_EPOCH")
     )
 }
+
+/**
+ * Sorts an [IOException] raised while fetching into "CelesTrak answered" versus "CelesTrak never
+ * answered".
+ *
+ * This exists as a named function rather than an inline `if` for two reasons. First, it is a trap:
+ * [CelestrakHttpException] and [CelestrakNoDataException] are themselves IOExceptions, so a naive
+ * `catch (e: IOException) { throw CelestrakUnreachableException(e) }` would swallow both. Losing the
+ * first one is the expensive mistake - a 403 would stop halting the refresh run, and that halt is
+ * the entire mechanism keeping this device off CelesTrak's 50-errors-in-2-hours firewall list.
+ * Second, [CelestrakApi] is an object with a private client and a hardcoded URL, so the catch block
+ * itself cannot be unit-tested; this function can, and it is where the whole risk lives.
+ *
+ * Both sibling exceptions mean a real response ARRIVED and are passed through untouched. Only a
+ * failure with no response at all - DNS, refused connection, dropped socket, callTimeout - is
+ * genuinely "unreachable".
+ */
+internal fun classifyFetchFailure(e: IOException): IOException =
+    if (e is CelestrakHttpException || e is CelestrakNoDataException) e
+    else CelestrakUnreachableException(e)
+
+/**
+ * CelesTrak could not be reached at all: no HTTP response of any kind came back.
+ *
+ * Deliberately NOT a [CelestrakHttpException] and deliberately does not halt querying. Nothing was
+ * received, so nothing counted against CelesTrak's error budget, and the user must stay free to
+ * retry the moment their connection returns. It exists so the UI can say what actually happened
+ * instead of blaming the satellite's catalog number, which is what a bare fetch failure looks like.
+ */
+class CelestrakUnreachableException(cause: IOException) :
+    IOException("Could not reach celestrak.org", cause)
 
 /**
  * CelesTrak answered with a non-2xx status.

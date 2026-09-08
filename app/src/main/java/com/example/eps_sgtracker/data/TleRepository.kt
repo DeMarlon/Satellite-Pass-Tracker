@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 import com.example.eps_sgtracker.network.CelestrakApi
 import com.example.eps_sgtracker.network.CelestrakHttpException
 import com.example.eps_sgtracker.network.CelestrakNoDataException
+import com.example.eps_sgtracker.network.CelestrakUnreachableException
 
 class TleRepository(
     private val tleDao: TleDao
@@ -23,6 +24,18 @@ class TleRepository(
 
     /** Non-null while querying is suspended after a non-200 response. Observed by the UI. */
     val refreshHalt: StateFlow<RefreshHalt?> = _refreshHalt.asStateFlow()
+
+    private val _celestrakUnreachable = MutableStateFlow<CelestrakUnreachable?>(null)
+
+    /** Non-null while the last completed fetch could not reach CelesTrak at all. Observed by the UI. */
+    val celestrakUnreachable: StateFlow<CelestrakUnreachable?> = _celestrakUnreachable.asStateFlow()
+
+    // When CelesTrak last answered anything at all - success, non-200, or an empty GP array. Used
+    // to settle the race described in publishUnreachable: refreshes run concurrently in batches, so
+    // one satellite's three failed attempts can finish AFTER another satellite has already proven
+    // the host reachable.
+    @Volatile
+    private var lastResponseMillis = 0L
 
     /**
      * Reads a satellite's element set, refreshing first if the cached copy is past the freshness
@@ -68,9 +81,15 @@ class TleRepository(
         // tapped inside the window - returns without touching the network at all.
         if (isHalted()) return@withContext null
 
+        val attemptStartMillis = System.currentTimeMillis()
+        var unreachable = false
+
         repeat(MAX_FETCH_ATTEMPTS) { attempt ->
             try {
                 val rawLines = CelestrakApi.fetchTle(noradId)
+                // Reached only if a body came back, which is proof of reachability regardless of
+                // whether the payload turns out to be usable below.
+                noteResponseReceived()
                 // A non-blank response isn't necessarily a valid TLE - Celestrak can return a
                 // non-blank error/rate-limit page with a 200 status. Caching that as if it were a
                 // real result used to strand the satellite permanently: it counted as a
@@ -103,20 +122,56 @@ class TleRepository(
                 // toward the 50-errors-in-2-hours threshold that firewalls an IP. The old code
                 // retried this three times per satellite, so N failing satellites produced 3N
                 // errors - a handful of Force Update taps was enough to cross that line.
+                //
+                // A 403 is still an answer, so it proves the host is reachable and clears any
+                // standing unreachable state - otherwise the UI would show both banners at once,
+                // one of them wrong.
+                noteResponseReceived()
                 haltQuerying(e.code)
                 return@withContext null
             } catch (e: CelestrakNoDataException) {
                 // HTTP 200 with an empty array: this catalog number does not exist. Terminal for
                 // this satellite, but deliberately NOT a halt - it cost nothing against the error
                 // budget, and one mistyped NORAD ID must not stop every other satellite refreshing.
+                // Also an answer, so it too proves reachability.
+                noteResponseReceived()
                 return@withContext null
+            } catch (e: CelestrakUnreachableException) {
+                // No response at all - DNS, refused connection, dropped socket, callTimeout. Still
+                // retried, because transport is the one category a retry can actually fix; only
+                // once every attempt is spent does publishUnreachable below report it.
+                e.printStackTrace()
+                unreachable = true
             } catch (e: Exception) {
-                // Transport-level: DNS, dropped socket, timeout. The only failure a retry can fix.
+                // Anything else: a malformed body, a JSON parse failure. Retryable, but not
+                // evidence about reachability either way, so the flag is left alone.
                 e.printStackTrace()
             }
             if (attempt < MAX_FETCH_ATTEMPTS - 1) delay(RETRY_BACKOFF_BASE_MS * (attempt + 1))
         }
+        if (unreachable) publishUnreachable(attemptStartMillis)
         return@withContext null
+    }
+
+    /** Records that CelesTrak answered something, which clears any standing unreachable state. */
+    private fun noteResponseReceived() {
+        lastResponseMillis = System.currentTimeMillis()
+        _celestrakUnreachable.value = null
+    }
+
+    /**
+     * Reports that every attempt for one satellite failed without a response.
+     *
+     * Guarded against a race that would otherwise leave a false banner up indefinitely:
+     * resolveSatelliteData runs satellites concurrently in batches, so a slow satellite can exhaust
+     * its three attempts and land here well after a faster one has already succeeded. Publishing
+     * unconditionally would overwrite proven-reachable state with a stale failure, and nothing
+     * would clear it until the next fetch. If a response arrived after this run started, that
+     * response is the newer truth and this failure is discarded.
+     */
+    private fun publishUnreachable(attemptStartMillis: Long) {
+        if (lastResponseMillis >= attemptStartMillis) return
+        _celestrakUnreachable.value = CelestrakUnreachable(lastAttemptMillis = System.currentTimeMillis())
     }
 
     /** True while a non-200 halt is in force; clears itself once the window has passed. */
@@ -192,4 +247,17 @@ data class RefreshHalt(
     val httpCode: Int,
     val haltedAtMillis: Long,
     val retryAtMillis: Long
+)
+
+/**
+ * Recorded when a refresh exhausted every attempt without CelesTrak responding at all.
+ *
+ * Distinct from [RefreshHalt] in the one way that matters: this does not suspend querying. A halt
+ * exists to keep the app off CelesTrak's error budget after the server said no; an unreachable host
+ * never said anything, so nothing was spent and the user should be able to retry the instant their
+ * connection comes back. It carries no retry deadline for the same reason - it clears itself the
+ * moment any response arrives.
+ */
+data class CelestrakUnreachable(
+    val lastAttemptMillis: Long
 )

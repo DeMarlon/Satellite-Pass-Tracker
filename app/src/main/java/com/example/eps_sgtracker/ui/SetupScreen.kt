@@ -124,6 +124,7 @@ fun SetupScreen(viewModel: TrackerViewModel) {
     val isUpdatingTles by viewModel.isUpdatingTles.collectAsStateWithLifecycle()
     val lastUpdatedText by viewModel.lastUpdatedText.collectAsStateWithLifecycle()
     val refreshHalt by viewModel.refreshHalt.collectAsStateWithLifecycle()
+    val celestrakUnreachable by viewModel.celestrakUnreachable.collectAsStateWithLifecycle()
     val satelliteTleTimestamps by viewModel.satelliteTleTimestamps.collectAsStateWithLifecycle()
     val satelliteTleEpochs by viewModel.satelliteTleEpochs.collectAsStateWithLifecycle()
     val stationColorOverrides by viewModel.stationColorOverrides.collectAsStateWithLifecycle()
@@ -295,8 +296,15 @@ fun SetupScreen(viewModel: TrackerViewModel) {
                             // state, because the automatic path reported a failed refresh as a
                             // success and simply served the stale cache.
                             val refreshFailed = resolvedName != null && sat.noradId in fetchFailedIds
-                            val displayName = resolvedName
-                                ?: if (fetchFailed) "Failed to fetch - check NORAD ID" else "Fetching name..."
+                            // "check NORAD ID" is only honest advice when CelesTrak actually
+                            // answered. During an outage the ID is very likely fine and the app has
+                            // simply never been able to ask, so saying otherwise sends the user off
+                            // to re-verify a correct number.
+                            val displayName = resolvedName ?: when {
+                                fetchFailed && celestrakUnreachable != null -> "CelesTrak unreachable - will retry"
+                                fetchFailed -> "Failed to fetch - check NORAD ID"
+                                else -> "Fetching name..."
+                            }
                             val satColor = getSatelliteColor(sat.noradId, satelliteColorOverrides)
 
                             val ommTimestampText = formatOmmTimestamp(satelliteTleTimestamps[sat.noradId], useUtcTime)
@@ -473,7 +481,11 @@ fun SetupScreen(viewModel: TrackerViewModel) {
                                         // CelesTrak declining the request.
                                         if (refreshFailed) {
                                             Text(
-                                                text = "Update failed - showing last known data",
+                                                text = if (celestrakUnreachable != null) {
+                                                    "CelesTrak unreachable - showing last known data"
+                                                } else {
+                                                    "Update failed - showing last known data"
+                                                },
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Medium,
                                                 color = MaterialTheme.colorScheme.error
@@ -622,6 +634,24 @@ fun SetupScreen(viewModel: TrackerViewModel) {
                             text = "CelesTrak returned HTTP ${halt.httpCode}. Querying is paused " +
                                 "until ${formatClockTime(halt.retryAtMillis, useUtcTime)} so this " +
                                 "device isn't blocked - cached orbital data is still in use.",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    // The other half of the story the halt banner above tells. Deliberately says
+                    // nothing about querying being paused, because it is not: no response was
+                    // received, so nothing counted against CelesTrak's error budget and retrying
+                    // the moment the connection returns is exactly the right thing to do. It also
+                    // names both possible causes rather than guessing between them - telling which
+                    // end is offline would need a network-state permission this app does not want.
+                    celestrakUnreachable?.let { unreachable ->
+                        Text(
+                            text = "Could not reach celestrak.org \u2014 your device or " +
+                                "celestrak.org might be offline. Last tried at " +
+                                "${formatClockTime(unreachable.lastAttemptMillis, useUtcTime)} - " +
+                                "cached orbital data is still in use.",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.error
